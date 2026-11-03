@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function codeOk(code) {
+      return code.size() >= 24 && code.matches('hub-.*');
+    }
+
+    // Exactly the keys data, v, updated; data is a string below maxSize.
+    function syncDocOk(maxSize) {
+      return request.resource.data.keys().hasOnly(['data', 'v', 'updated'])
+        && request.resource.data.keys().hasAll(['data', 'v', 'updated'])
+        && request.resource.data.data is string
+        && request.resource.data.data.size() < maxSize;
+    }
+
+    // Family hub: tickets earned by the kids from the learning apps.
+    match /hubs/{code} {
+      allow get: if codeOk(code);
+      allow create, update: if codeOk(code) && syncDocOk(200000);
+      allow list, delete: if false;
+
+      match /tickets/{id} {
+        allow get, list: if codeOk(code);
+        allow create: if codeOk(code)
+          && request.resource.data.keys().hasOnly(['kid', 'app', 'tickets', 'ts', 'detail'])
+          && request.resource.data.keys().hasAll(['kid', 'app', 'tickets', 'ts', 'detail'])
+          && request.resource.data.kid in ['zyler', 'kadyn']
+          && request.resource.data.app in ['amc', 'french', 'typing', 'spelling']
+          && request.resource.data.tickets is int
+          && request.resource.data.tickets >= 1
+          && request.resource.data.tickets <= 200
+          && request.resource.data.ts is int
+          && request.resource.data.detail is string
+          && request.resource.data.detail.size() <= 80;
+        allow update, delete: if false;
+      }
+    }
+
+    // Progress sync docs for the typing and spelling apps.
+    match /typing/{code} {
+      allow get: if codeOk(code);
+      allow create, update: if codeOk(code) && syncDocOk(900000);
+      allow list, delete: if false;
+    }
+
+    match /spelling/{code} {
+      allow get: if codeOk(code);
+      allow create, update: if codeOk(code) && syncDocOk(900000);
+      allow list, delete: if false;
+    }
+  }
+}
