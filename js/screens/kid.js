@@ -4,7 +4,9 @@ import { APPS } from "../balance.js";
 import { getHubCode, getSettings, loadKidData } from "../app.js";
 import { APP_INFO, STATUS_LABEL, appHref, bestPick, tileNote, recentLine, nextUnlock, clockLabel } from "../view-model.js";
 
-const REFRESH_MS = 60000;
+// Every check costs Firestore reads (one per ticket since yesterday), so a tab left open
+// stays well inside the free daily quota. Coming back to the tab refreshes at once.
+const REFRESH_MS = 5 * 60000;
 
 const pct = x => Math.round(x * 100);
 
@@ -97,7 +99,7 @@ export function render(root, { id }) {
       draw(d);
     } catch (e) {
       if (!live || mine !== seq) return;
-      body.replaceChildren(h("p", { class: "banner", role: "alert" }, "Couldn’t load tickets just now. We’ll try again in a minute."));
+      body.replaceChildren(h("p", { class: "banner", role: "alert" }, "Couldn’t load tickets just now. We’ll try again in a few minutes."));
     }
   }
   refresh();

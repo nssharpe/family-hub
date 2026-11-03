@@ -1,6 +1,6 @@
 // Incremental reads of the hub's ticket log (R26). Tickets are immutable and create-only, so the events
 // we fetched stay valid: keep them, ask only for the recent ones on a routine refresh, and do the
-// full 14-day query rarely. A page left open polls every 60 s, and a full query every poll would
+// full 14-day query rarely. A page left open polls every few minutes, and a full query every poll would
 // burn the Firestore free read quota. Pure: no DOM, no storage, no network.
 
 import { ticketsSince, localDayKey } from "./balance.js";
