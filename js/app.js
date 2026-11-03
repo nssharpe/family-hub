@@ -2,10 +2,11 @@
 // single localStorage key `family-hub:v1` (GitHub Pages shares one origin between every app).
 // No DOM at import time, so tests can load it.
 
-import { DEFAULT_SETTINGS, effectiveSettings, amcTicketEvents, ticketsSince } from "./balance.js";
+import { DEFAULT_SETTINGS, effectiveSettings, amcTicketEvents } from "./balance.js";
 import { getHub, listTickets, isHubCode } from "./hub-client.js";
 import { amcAnswers } from "./amc-sheet.js";
-import { buildKidData, kidEvents } from "./view-model.js";
+import { buildKidData, kidEvents, afterStart } from "./view-model.js";
+import { refreshTickets } from "./ticket-cache.js";
 
 export const STORE_KEY = "family-hub:v1";
 
@@ -69,15 +70,21 @@ export async function refreshSettings(timeoutMs = HUB_TIMEOUT_MS) {
 
 const ok = r => r.status === "fulfilled";
 
+// The hub log's events as of `now`, read incrementally. Resolves to { events, cache } (the entry to store).
+function hubTickets(s, now, timeoutMs) {
+  const code = s.hub;
+  return refreshTickets(s.cache.hub, code, now, since => withTimeout(listTickets(code, since), timeoutMs));
+}
+
 // Everything the kid screen shows. Resolves to null if the kid isn't in the settings.
-// Tickets come from the hub log (fetched from ticketsSince(now), so the hub and the extension
-// count the same events) plus the kid's AMC answers from the Sheet. If a source can't be read,
+// Tickets come from the hub log (cached by id; a full fetch from ticketsSince(now) now and then, routine
+// refreshes ask only for yesterday and later, see ticket-cache.js) plus the kid's AMC answers from the Sheet. If a source can't be read,
 // its last cached copy is used and `stale` is true (`staleAt` = when that copy was saved, if known).
 export async function loadKidData(kidId, now = Date.now(), timeoutMs = HUB_TIMEOUT_MS) {
   const s = load();
   const [, hubR, amcR] = await Promise.all([
     refreshSettings(timeoutMs),
-    Promise.allSettled([s.hub ? withTimeout(listTickets(s.hub, ticketsSince(now)), timeoutMs) : Promise.resolve([])]).then(r => r[0]),
+    Promise.allSettled([s.hub ? hubTickets(s, now, timeoutMs) : Promise.resolve(null)]).then(r => r[0]),
     Promise.allSettled([amcAnswers(kidId)]).then(r => r[0]),
   ]);
 
@@ -87,8 +94,10 @@ export async function loadKidData(kidId, now = Date.now(), timeoutMs = HUB_TIMEO
 
   let hubEvents;
   if (ok(hubR)) {
-    hubEvents = hubR.value;
-    if (s.hub) s.cache.hub = { events: hubEvents, at: now };
+    if (hubR.value) {
+      hubEvents = hubR.value.events;
+      if (s.hub === hubR.value.cache.code) s.cache.hub = hubR.value.cache; // not if the device switched hubs meanwhile
+    } else hubEvents = []; // no hub joined
   } else {
     hubEvents = (s.cache.hub && s.cache.hub.events) || [];
     useCache(s.cache.hub);
@@ -107,7 +116,8 @@ export async function loadKidData(kidId, now = Date.now(), timeoutMs = HUB_TIMEO
   const settings = getSettings(now);
   const kid = settings.kids[kidId];
   if (!kid) return null;
-  const events = kidEvents(hubEvents, amcTicketEvents(answers, kidId, settings.rates)); // R11: no hub amc events
+  // R11: no hub amc events. R20: nothing from before the hub started counts (when the hub says when it started).
+  const events = afterStart(kidEvents(hubEvents, amcTicketEvents(answers, kidId, settings.rates)), settings.startedAt);
   const data = buildKidData(events, settings, kidId, now);
   return {
     ...data,

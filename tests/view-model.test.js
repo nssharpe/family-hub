@@ -58,3 +58,14 @@ test("kidEvents (R11): amc events in the hub log are ignored, Sheet-derived ones
   assert.equal(d.mix.amc.counted, 2);
   assert.deepEqual(kidEvents(null, null), []);
 });
+
+test("afterStart (R20): drops events before startedAt, keeps the rest; no usable startedAt keeps all", async () => {
+  const { afterStart } = await import("../js/view-model.js");
+  const ev = [{ id: "a", ts: 100 }, { id: "b", ts: 200 }, { id: "c", ts: 300 }];
+  assert.deepEqual(afterStart(ev, 200).map(e => e.id), ["b", "c"], "ts equal to startedAt counts");
+  assert.deepEqual(afterStart(ev, undefined), ev);
+  assert.deepEqual(afterStart(ev, null), ev);
+  assert.deepEqual(afterStart(ev, "200"), ev, "a non-number is ignored");
+  assert.deepEqual(afterStart(ev, NaN), ev);
+  assert.deepEqual(afterStart(ev, 1000), []);
+});

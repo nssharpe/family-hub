@@ -83,3 +83,10 @@ export function buildKidData(events, settings, kidId, now) {
 export function kidEvents(hubEvents, amcEvents) {
   return (hubEvents || []).filter(e => e && e.app !== "amc").concat(amcEvents || []);
 }
+
+// R20: events from before `startedAt` (ms, the hub's start) don't count, so history from before the hub
+// existed (the AMC Sheet goes back years) can't fill a weekly cap. No usable startedAt: everything stays.
+export function afterStart(events, startedAt) {
+  if (typeof startedAt !== "number" || !Number.isFinite(startedAt)) return events;
+  return (events || []).filter(e => e && e.ts >= startedAt);
+}
