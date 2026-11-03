@@ -4,11 +4,11 @@
 // starts at the next local midnight (balance.js withPendingChange).
 // `#join=<code>` lands here with { join: code }: a "Join this family hub?" prompt that needs no password.
 import { h } from "../dom.js";
-import { APPS, APP_NAMES, DEFAULT_SETTINGS, effectiveSettings, withPendingChange, validateSettings } from "../balance.js";
+import { APPS, APP_NAMES, effectiveSettings, withPendingChange, validateSettings } from "../balance.js";
 import { getHub, putHub, makeHubCode, HubConflict } from "../hub-client.js";
 import { getHubCode, joinHub, refreshSettings, withTimeout } from "../app.js";
 import {
-  isParentPassword, joinLink, formToSettings, settingsToForm, kidGuarantees, pendingInfo, summarizeSettings,
+  isParentPassword, joinLink, formToSettings, inputText, newHubSettings, CONFIRM_CREATE_HUB, settingsToForm, kidGuarantees, pendingInfo, summarizeSettings,
 } from "../settings-form.js";
 
 const UNLOCK_KEY = "family-hub:v1:unlocked"; // sessionStorage: gone when the browser session ends
@@ -77,13 +77,14 @@ export function render(root, params = {}) {
     const out = h("div", {}, error && msg("err", error));
     const btn = h("button", { class: "btn", type: "button" }, "Create the family hub");
     btn.addEventListener("click", async () => {
+      if (!confirm(CONFIRM_CREATE_HUB)) return; // a second hub would split the family's tickets
       btn.disabled = true;
       out.replaceChildren();
       let failed = "Couldn’t create the hub. Check the connection and try again.";
       for (let i = 0; i < 3; i++) {
         const code = makeHubCode();
         try {
-          await withTimeout(putHub(code, DEFAULT_SETTINGS, null));
+          await withTimeout(putHub(code, newHubSettings(Date.now()), null));
           joinHub(code);
           await refreshSettings();
           if (live) loadEditor(code, true);
@@ -201,7 +202,7 @@ export function render(root, params = {}) {
     let ladder = f0.ladder.map(r => ({ ...r }));
     const ladderBox = h("ul", { class: "ladder-list" });
     const addBtn = h("button", { class: "btn secondary", type: "button" }, "Add a row");
-    const readLadder = () => Array.from(ladderBox.children, li => ({ tickets: li.querySelector(".lt").value, minutes: li.querySelector(".lm").value }));
+    const readLadder = () => Array.from(ladderBox.children, li => ({ tickets: inputText(li.querySelector(".lt")), minutes: inputText(li.querySelector(".lm")) }));
     const drawLadder = () => {
       ladderBox.replaceChildren(...ladder.map((row, i) => h("li", { class: "ladder-row" },
         h("span", { class: "ladder-n" }, `Unlock ${i + 1}`),
@@ -250,9 +251,9 @@ export function render(root, params = {}) {
     const saveBtn = h("button", { class: "btn", type: "submit" }, "Save changes");
     const readForm = () => ({
       kids: Object.fromEntries(kidIds.map(id => [id, { ranges: Object.fromEntries(APPS.map(a =>
-        [a, { min: rangeInputs[id][a].min.value, max: rangeInputs[id][a].max.value }])) }])),
-      rates: Object.fromEntries(Object.entries(rateInputs).map(([k, el]) => [k, el.value])),
-      baseline: baselineInput.value,
+        [a, { min: inputText(rangeInputs[id][a].min), max: inputText(rangeInputs[id][a].max) }])) }])),
+      rates: Object.fromEntries(Object.entries(rateInputs).map(([k, el]) => [k, inputText(el)])),
+      baseline: inputText(baselineInput),
       ladder: readLadder(),
     });
     const form = h("form", { novalidate: true, onsubmit: async (e) => {

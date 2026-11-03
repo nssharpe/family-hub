@@ -35,14 +35,25 @@ Run it after every rules change (wait a minute after deploying if everything is 
 ## Kid view (hub UI)
 
 - **Files:** `index.html`, `css/hub.css`, `js/main.js` (hash router), `js/app.js` (state + `loadKidData`), `js/amc-sheet.js`,
-  `js/view-model.js` (pure helpers), `js/dom.js`, `js/settings-form.js` (pure form helpers), `js/screens/{pick,kid,grownups}.js`. No build step, relative URLs only.
+  `js/view-model.js` (pure helpers), `js/ticket-cache.js` (incremental ticket reads), `js/dom.js`, `js/settings-form.js` (pure form helpers), `js/screens/{pick,kid,grownups}.js`. No build step, relative URLs only.
 - **Routes:** `#/` picker, `#/kid/<id>`, `#/grown-ups`, `#join=<hub code>`
   (replaces the URL with `#/grown-ups` so the code doesn't linger in the address bar, then asks "Join this family hub?" and stores the code only on a yes).
 - **State:** one localStorage key `family-hub:v1` = `{ v, hub, settingsDoc, cache: { hub: {events, at}, amc: {[kid]: {answers, at}} } }`.
   Settings come from the hub doc (`settings.kids`), falling back to `DEFAULT_SETTINGS` with no hub.
-- **Tickets (R8):** the hub log is fetched from exactly `ticketsSince(now)`; AMC tickets are derived from the Sheet with
-  `amcTicketEvents`; `countTickets` runs per kid (events are filtered by kid first). If a source fails, its cached copy is used,
+- **Tickets (R8):** AMC tickets are derived from the Sheet with `amcTicketEvents`; `countTickets` runs per kid
+  (events are filtered by kid first). If a source fails, its cached copy is used,
   and the screen says "Tickets may still be arriving, showing what we had at <time>".
+- **Incremental reads (R26):** tickets are immutable and create-only, so the hub log is cached in `family-hub:v1`
+  (`cache.hub = { code, events, at, fullAt }`, merged by id, aged out before `ticketsSince(now)`; `js/ticket-cache.js`).
+  The 60 s refresh queries only `ts >= local midnight yesterday`. A full fetch from `ticketsSince(now)` runs when there is no cache,
+  the cache belongs to another hub code, the last full fetch was 6 h ago, or the local day changed. A page left open must not
+  burn the Firestore free read quota (50k/day), so don't add polling or full queries without checking the math.
+  `js/hub-client.js` is untouched (it is copied verbatim into four apps); `listTickets(code, sinceTs)` already takes the since.
+- **Start time (R20):** hub settings carry an optional `startedAt` (ms), set when the hub is created (`newHubSettings`).
+  `loadKidData` drops events (hub tickets and Sheet-derived AMC) with `ts < startedAt` before counting (`afterStart`), so history
+  from before the hub can't fill a cap. The extension uses max(startedAt, its own start); the hub uses `startedAt` alone.
+  `validateSettings` ignores unknown fields, so no change to the shared `balance.js` was needed; `startedAt` survives saves
+  because `formToSettings` clones `current`.
 - **AMC Sheet:** `js/amc-sheet.js` reads it by gviz JSONP (`tqx=responseHandler:<cb>`, `select * where B='<kid>'`).
   The Sheet's kid column holds the lowercase kid id (`zyler`), the same id the extension queries with. `parseGviz` and
   `countedAnswers` are verbatim copies from `amc8-quest/extension/src/lib/ladder.js`; the JSONP payload object is wrapped back
@@ -51,8 +62,11 @@ Run it after every rules change (wait a minute after deploying if everything is 
 - **Grown-ups' corner** (`js/screens/grownups.js`, pure helpers in `js/settings-form.js`):
   - Password gate: SHA-256 of the input against the AMC 8 Quest `PARENT_HASH`; unlocked for the browser session only
     (`sessionStorage` key `family-hub:v1:unlocked`). A soft gate: the hub code is the real secret. Joining needs no password.
-  - "Create the family hub" makes a code (`makeHubCode`), `putHub(code, DEFAULT_SETTINGS, null)`, joins this device, and shows the join link
+  - "Create the family hub" first asks "Already have a hub on another device? Open its join link here instead. Create a new hub anyway?",
+    then makes a code (`makeHubCode`), `putHub(code, newHubSettings(now), null)` (defaults plus `startedAt`), joins this device, and shows the join link
     `https://nssharpe.github.io/family-hub/#join=<code>` (also what the extension's options page accepts). Never create the real hub from tests.
+  - A blank or half-typed number is invalid, never a 0: `parseNum("")` is NaN, and `readForm` reads number inputs through
+    `inputText` (`validity.badInput` -> text `parseNum` rejects), so `validateSettings` shows its error and nothing is saved.
   - Settings form: per kid min/max per app (step 5) with the live guaranteed share and the `guaranteedShares` warnings verbatim,
     the rates, the baseline week and the ladder (add/remove rows). Save = `formToSettings` -> `validateSettings` -> `withPendingChange` -> `putHub`
     with the `updateTime` precondition. The change is stored as `pending` and starts at the next local midnight (banner shows the date).

@@ -3,18 +3,20 @@ import assert from "node:assert/strict";
 import { DEFAULT_SETTINGS, validateSettings, withPendingChange, effectiveSettings } from "../js/balance.js";
 import {
   parseNum, formToSettings, settingsToForm, kidGuarantees, pendingInfo, dayLabel, summarizeSettings,
-  sha256Hex, isParentPassword, joinLink, PARENT_HASH,
+  sha256Hex, isParentPassword, joinLink, PARENT_HASH, inputText, BAD_NUMBER_TEXT, newHubSettings, CONFIRM_CREATE_HUB,
 } from "../js/settings-form.js";
 
 const NOW = new Date(2026, 10, 3, 16, 30).getTime(); // Tue 3 Nov 2026, 4:30pm local
 
-test("parseNum: percent strings become numbers, blank becomes 0, junk becomes NaN", () => {
+test("parseNum: percent strings become numbers, blank and junk become NaN", () => {
   assert.equal(parseNum("30"), 30);
   assert.equal(parseNum(" 30% "), 30);
   assert.equal(parseNum("45 %"), 45);
-  assert.equal(parseNum(""), 0);
-  assert.equal(parseNum("   "), 0);
-  assert.equal(parseNum(undefined), 0);
+  assert.ok(Number.isNaN(parseNum("")), "a blank box is not a 0");
+  assert.ok(Number.isNaN(parseNum("   ")));
+  assert.ok(Number.isNaN(parseNum(undefined)));
+  assert.ok(Number.isNaN(parseNum("3e")), "half-typed");
+  assert.ok(Number.isNaN(parseNum(BAD_NUMBER_TEXT)));
   assert.equal(parseNum("0.2"), 0.2);
   assert.equal(parseNum(".5"), 0.5);
   assert.ok(Number.isNaN(parseNum("abc")));
@@ -27,14 +29,14 @@ test("formToSettings: round trip of the defaults is unchanged", () => {
   assert.deepEqual(back, DEFAULT_SETTINGS);
 });
 
-test("formToSettings: strings in, numbers out; blank is 0; names, v and untouched kids stay", () => {
+test("formToSettings: strings in, numbers out; names, v and untouched kids stay", () => {
   const fv = settingsToForm(DEFAULT_SETTINGS);
   fv.kids.zyler.ranges.typing = { min: "25%", max: "45" };
-  fv.kids.zyler.ranges.amc = { min: "", max: " 30 " };
+  fv.kids.zyler.ranges.amc = { min: "0", max: " 30 " };
   fv.rates.amcPerNum = "0.25";
   fv.rates.typingCharsPerTicket = "120";
   fv.baseline = "200";
-  fv.ladder = [{ tickets: "10", minutes: "20" }, { tickets: "20", minutes: "" }];
+  fv.ladder = [{ tickets: "10", minutes: "20" }, { tickets: "20", minutes: "0" }];
   const before = JSON.stringify(DEFAULT_SETTINGS);
   const s = formToSettings(fv, DEFAULT_SETTINGS);
   assert.deepEqual(s.kids.zyler.ranges.typing, [25, 45]);
@@ -61,7 +63,7 @@ test("formToSettings: a pending change on `current` is dropped, bad input fails 
   fv.kids.kadyn.ranges.french = { min: "50", max: "10" };
   assert.match(validateSettings(formToSettings(fv, DEFAULT_SETTINGS)), /min can't be more than the max/);
   fv.kids.kadyn.ranges.french = { min: "0", max: "100" };
-  fv.ladder = [{ tickets: "", minutes: "30" }]; // blank tickets -> 0 -> rejected, not saved
+  fv.ladder = [{ tickets: "", minutes: "30" }]; // blank tickets -> NaN -> rejected, not saved
   assert.match(validateSettings(formToSettings(fv, DEFAULT_SETTINGS)), /Ladder row 1: tickets/);
 });
 
@@ -127,4 +129,60 @@ test("password gate hashes with SHA-256", async () => {
 
 test("joinLink points at the Pages site", () => {
   assert.equal(joinLink("hub-abcde-23456-fghjk-mnpqr"), "https://nssharpe.github.io/family-hub/#join=hub-abcde-23456-fghjk-mnpqr");
+});
+
+test("a blank or half-typed number is invalid, never a silent 0 (it would turn an app off)", () => {
+  const base = () => settingsToForm(DEFAULT_SETTINGS);
+  const cases = {
+    "range max blank": fv => { fv.kids.zyler.ranges.typing.max = ""; },
+    "range min blank": fv => { fv.kids.kadyn.ranges.amc.min = "  "; },
+    "range max half-typed": fv => { fv.kids.zyler.ranges.french.max = inputText({ value: "", validity: { badInput: true } }); },
+    "rate blank": fv => { fv.rates.frenchCardsPerTicket = ""; },
+    "rate half-typed": fv => { fv.rates.amcPerNum = "0.2e"; },
+    "baseline blank": fv => { fv.baseline = ""; },
+    "ladder minutes half-typed": fv => { fv.ladder[0].minutes = BAD_NUMBER_TEXT; },
+  };
+  for (const [name, mutate] of Object.entries(cases)) {
+    const fv = base();
+    mutate(fv);
+    assert.ok(validateSettings(formToSettings(fv, DEFAULT_SETTINGS)), name + " must not validate");
+  }
+});
+
+test("inputText: a number box with half-typed text reads as bad input, not as blank", () => {
+  assert.equal(inputText({ value: "", validity: { badInput: true } }), BAD_NUMBER_TEXT);
+  assert.equal(inputText({ value: "", validity: { badInput: false } }), "");
+  assert.equal(inputText({ value: "30", validity: { badInput: false } }), "30");
+  assert.equal(inputText({ value: "abc" }), "abc", "text inputs have no badInput");
+  assert.ok(Number.isNaN(parseNum(inputText({ value: "", validity: { badInput: true } }))));
+});
+
+test("newHubSettings: the defaults plus startedAt, validates, and doesn't touch DEFAULT_SETTINGS", () => {
+  const s = newHubSettings(NOW);
+  assert.equal(s.startedAt, NOW);
+  assert.equal(validateSettings(s), null);
+  assert.deepEqual({ ...s, startedAt: undefined }, { ...DEFAULT_SETTINGS, startedAt: undefined });
+  assert.ok(!("startedAt" in DEFAULT_SETTINGS));
+  s.kids.zyler.ranges.amc[1] = 1;
+  assert.equal(DEFAULT_SETTINGS.kids.zyler.ranges.amc[1], 30, "a deep copy");
+});
+
+test("validateSettings accepts an optional startedAt (R20): present or absent", () => {
+  assert.equal(validateSettings(DEFAULT_SETTINGS), null);
+  assert.equal(validateSettings({ ...DEFAULT_SETTINGS, startedAt: NOW }), null);
+});
+
+test("startedAt survives a settings save: form -> pending change -> effective settings", () => {
+  const doc = newHubSettings(NOW - 5 * 86400e3);
+  const next = formToSettings(settingsToForm(doc), effectiveSettings(doc, NOW));
+  assert.equal(next.startedAt, doc.startedAt);
+  const saved = withPendingChange(doc, next, NOW);
+  assert.equal(saved.startedAt, doc.startedAt);
+  assert.equal(saved.pending.settings.startedAt, doc.startedAt);
+  const tomorrow = new Date(2026, 10, 4, 0, 5).getTime();
+  assert.equal(effectiveSettings(saved, tomorrow).startedAt, doc.startedAt, "still there once the pending change is in force");
+});
+
+test("the second-hub confirmation says to use the join link first", () => {
+  assert.equal(CONFIRM_CREATE_HUB, "Already have a hub on another device? Open its join link here instead. Create a new hub anyway?");
 });

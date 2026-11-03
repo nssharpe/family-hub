@@ -1,7 +1,7 @@
 // Pure helpers for the grown-ups' settings form. No DOM, no storage, no network, so `npm test`
 // can load it. The form works in strings (what the inputs hold); these turn them into HubSettings.
 
-import { APPS, APP_NAMES, guaranteedShares, localDayKey } from "./balance.js";
+import { APPS, APP_NAMES, DEFAULT_SETTINGS, guaranteedShares, localDayKey } from "./balance.js";
 
 // SHA-256 of the parents' password (the same one the AMC 8 Quest PARENT_HASH uses). It is a soft
 // gate that keeps kids out of the settings, not real security: the hub code is the real secret.
@@ -22,13 +22,20 @@ export async function isParentPassword(text, hash = PARENT_HASH) {
 
 // ---------- strings to numbers ----------
 
-// "30", " 30 ", "30%" -> 30; "" (blank) -> 0; "0.2" -> 0.2. Anything else ("abc", "1e3", "0x10") -> NaN,
-// which validateSettings then rejects with a message instead of saving something odd.
+// "30", " 30 ", "30%" -> 30; "0.2" -> 0.2. Anything else -> NaN, which validateSettings then rejects with a
+// message instead of saving something odd: "abc", "1e3", "0x10", a half-typed "3e", and blank (a blank box is
+// not a 0; it used to silently turn an app off).
 export function parseNum(v) {
   if (typeof v === "number") return v;
   const s = String(v == null ? "" : v).trim().replace(/%$/, "").trim();
-  if (s === "") return 0;
   return /^-?(\d+\.?\d*|\.\d+)$/.test(s) ? Number(s) : NaN;
+}
+
+// What a number input holds, as text. A type=number box with half-typed text ("3e") reports value "" while
+// validity.badInput is true; that must not read as blank, so it becomes text parseNum rejects.
+export const BAD_NUMBER_TEXT = "(not a number)";
+export function inputText(el) {
+  return el && el.validity && el.validity.badInput ? BAD_NUMBER_TEXT : el.value;
 }
 
 const RATE_KEYS = ["amcBase", "amcPerNum", "amc10Mult", "frenchCardsPerTicket", "typingCharsPerTicket", "typingMasteredFactor", "spellingWordsPerTicket"];
@@ -76,7 +83,7 @@ export function settingsToForm(s) {
 }
 
 // Guaranteed share and warning per app for one kid's form ranges ({ [app]: { min, max } } of strings).
-// Half-typed values count as 0 here, so the preview never shows NaN; Save still validates properly.
+// Half-typed or blank values count as 0 here, so the preview never shows NaN; Save still validates properly.
 export function kidGuarantees(rangesForm) {
   const ranges = {};
   for (const app of APPS) {
@@ -86,6 +93,16 @@ export function kidGuarantees(rangesForm) {
   }
   return guaranteedShares(ranges);
 }
+
+// ---------- creating and joining a hub ----------
+
+// The settings a brand-new hub starts with. `startedAt` (ms) is when the hub began: ticket history from before
+// it never counts (R20), so the weeks of AMC answers already in the Sheet can't fill a cap on day one.
+export function newHubSettings(now = Date.now()) {
+  return { ...JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), startedAt: now };
+}
+
+export const CONFIRM_CREATE_HUB = "Already have a hub on another device? Open its join link here instead. Create a new hub anyway?";
 
 // ---------- pending change ----------
 
