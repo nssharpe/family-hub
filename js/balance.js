@@ -78,7 +78,8 @@ export function validateSettings(s) {
   if (!isNum(r.amcBase, 0, 1000) || !isNum(r.amcPerNum, 0, 1000)) return "AMC rates must be numbers of 0 or more.";
   if (!isNum(r.amc10Mult, 0, 100) || r.amc10Mult <= 0) return "The AMC 10 multiplier must be more than 0.";
   for (const k of ["frenchCardsPerTicket", "typingCharsPerTicket", "spellingWordsPerTicket"]) {
-    if (!isNum(r[k], 0, 1e6) || r[k] <= 0) return "Each per-ticket rate must be more than 0.";
+    // Whole numbers: the apps pay per N whole cards, characters or words.
+    if (!isInt(r[k], 1, 1e6)) return "Each per-ticket rate must be a whole number of at least 1.";
   }
   if (!isNum(r.typingMasteredFactor, 0, 1)) return "The replay factor must be from 0 to 1.";
   if (!isInt(s.baseline, 1, 100000)) return "The baseline week must be a whole number of at least 1.";

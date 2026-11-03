@@ -195,7 +195,8 @@ export function createOutbox(storage, key) {
   async function sendOne(code, e) {
     try {
       const res = await fetch(`${HUB_API}/hubs/${encodeURIComponent(code)}/tickets/${encodeURIComponent(e.id)}?currentDocument.exists=false`, {
-        method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ fields: ticketFields(e) }),
+        // keepalive: a flush started as the tab closes still reaches Firestore.
+        method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ fields: ticketFields(e) }), keepalive: true,
       });
       if (res.ok) return true;
       if (res.status === 409 || res.status === 400) return (await errorStatus(res)) === 'ALREADY_EXISTS';

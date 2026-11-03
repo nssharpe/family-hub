@@ -117,7 +117,10 @@ export async function loadKidData(kidId, now = Date.now(), timeoutMs = HUB_TIMEO
   const kid = settings.kids[kidId];
   if (!kid) return null;
   // R11: no hub amc events. R20: nothing from before the hub started counts (when the hub says when it started).
-  const events = afterStart(kidEvents(hubEvents, amcTicketEvents(answers, kidId, settings.rates)), settings.startedAt);
+  // A pending change that lacks startedAt falls back to the stored doc's, as the extension does.
+  const doc = load().settingsDoc;
+  const startedAt = Number.isFinite(settings.startedAt) ? settings.startedAt : doc && doc.startedAt;
+  const events = afterStart(kidEvents(hubEvents, amcTicketEvents(answers, kidId, settings.rates)), startedAt);
   const data = buildKidData(events, settings, kidId, now);
   return {
     ...data,

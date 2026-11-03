@@ -404,6 +404,8 @@ test("validateSettings rejects bad ranges, ladder rows and baselines", () => {
   isErr(bad(s => { s.baseline = 0; }));
   isErr(bad(s => { s.baseline = 0.5; }));
   isErr(bad(s => { s.rates.frenchCardsPerTicket = 0; }));
+  isErr(bad(s => { s.rates.frenchCardsPerTicket = 2.5; }));
+  isErr(bad(s => { s.rates.spellingWordsPerTicket = 1.5; }));
   isErr(bad(s => { s.kids.zyler.name = ""; }));
   isErr(validateSettings(null));
 });

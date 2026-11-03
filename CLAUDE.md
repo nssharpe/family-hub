@@ -45,7 +45,7 @@ Run it after every rules change (wait a minute after deploying if everything is 
   and the screen says "Tickets may still be arriving, showing what we had at <time>".
 - **Incremental reads (R26):** tickets are immutable and create-only, so the hub log is cached in `family-hub:v1`
   (`cache.hub = { code, events, at, fullAt }`, merged by id, aged out before `ticketsSince(now)`; `js/ticket-cache.js`).
-  The 60 s refresh queries only `ts >= local midnight yesterday`. A full fetch from `ticketsSince(now)` runs when there is no cache,
+  The routine refresh (every 5 min, R27) queries only `ts >= local midnight yesterday`. A full fetch from `ticketsSince(now)` runs when there is no cache,
   the cache belongs to another hub code, the last full fetch was 6 h ago, or the local day changed. A page left open must not
   burn the Firestore free read quota (50k/day), so don't add polling or full queries without checking the math.
   `js/hub-client.js` is untouched (it is copied verbatim into four apps); `listTickets(code, sinceTs)` already takes the since.
@@ -58,7 +58,7 @@ Run it after every rules change (wait a minute after deploying if everything is 
   The Sheet's kid column holds the lowercase kid id (`zyler`), the same id the extension queries with. `parseGviz` and
   `countedAnswers` are verbatim copies from `amc8-quest/extension/src/lib/ladder.js`; the JSONP payload object is wrapped back
   into `setResponse(...)` text so `parseGviz` stays unchanged.
-- **Refresh:** on load, every 60 s while the tab is visible, and on `visibilitychange`.
+- **Refresh:** on load, every 5 min while the tab is visible (R27, read quota), and on `visibilitychange`.
 - **Grown-ups' corner** (`js/screens/grownups.js`, pure helpers in `js/settings-form.js`):
   - Password gate: SHA-256 of the input against the AMC 8 Quest `PARENT_HASH`; unlocked for the browser session only
     (`sessionStorage` key `family-hub:v1:unlocked`). A soft gate: the hub code is the real secret. Joining needs no password.
