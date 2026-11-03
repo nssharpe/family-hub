@@ -226,14 +226,104 @@ test("outbox keeps rejected and server-error events pending, sends the rest", as
   assert.deepEqual(ob.pending().map(e => e.id), [e1.id, e2.id]);
 });
 
-test("outbox.add ignores an id that is already pending", () => {
+test("outbox.add ignores an id that is already pending (returns true, first one wins)", () => {
   const ob = createOutbox(storageStub(), "k");
   assert.equal(ob.add(ev(1)), true);
-  assert.equal(ob.add(ev(1, { tickets: 9 })), false);
+  assert.equal(ob.add(ev(1, { tickets: 9 })), true);
   assert.equal(ob.pending().length, 1);
   assert.equal(ob.pending()[0].tickets, 2);
   assert.equal(ob.add(null), false);
   assert.equal(ob.add({ kid: "zyler" }), false);
+});
+
+test("outbox.add rejects events that break the shared contract", () => {
+  const ob = createOutbox(storageStub(), "k");
+  const bad = {
+    "kid not allowed": { kid: "mom" },
+    "kid missing": { kid: undefined },
+    "app not allowed": { app: "chess" },
+    "tickets 0": { tickets: 0 },
+    "tickets 201": { tickets: 201 },
+    "tickets fraction": { tickets: 1.5 },
+    "tickets string": { tickets: "2" },
+    "tickets NaN": { tickets: NaN },
+    "ts fraction": { ts: 1730000000000.5 },
+    "ts NaN": { ts: NaN },
+    "ts Infinity": { ts: Infinity },
+    "ts string": { ts: "1730000000000" },
+    "id empty": { id: "" },
+    "id with slash": { id: "amc/2023/5" },
+    "id __x__": { id: "__name__" },
+    "id dot": { id: "." },
+    "id dotdot": { id: ".." },
+    "id not a string": { id: 7 },
+    "detail not a string": { detail: 5 },
+    "detail missing": { detail: undefined },
+  };
+  for (const [name, over] of Object.entries(bad)) assert.equal(ob.add(ev(1, over)), false, name);
+  assert.equal(ob.pending().length, 0);
+  // boundaries that are fine
+  const fine = [{ tickets: 1 }, { tickets: 200 }, { kid: "kadyn", app: "amc" }, { app: "typing" }, { app: "spelling" }, { detail: "" }, { id: "a__b" }, { id: "__a" }];
+  fine.forEach((over, i) => assert.equal(ob.add(ev(i + 10, { id: `ok${i}`, ...over })), true, JSON.stringify(over)));
+  assert.equal(ob.pending().length, fine.length);
+});
+
+test("outbox.add keeps `detail` within 80 code points and never splits an emoji", async () => {
+  const st = storageStub();
+  const ob = createOutbox(st, "k");
+  const detail = "x".repeat(79) + "\u{1F600}" + "tail"; // the emoji starts at index 79 and spans UTF-16 units 79-80
+  assert.equal(ob.add(ev(1, { detail })), true);
+  const stored = JSON.parse(st.m.get("k"))[0].detail;
+  assert.equal(stored, "x".repeat(79) + "\u{1F600}");
+  assert.equal(Array.from(stored).length, 80);
+  assert.equal(ob.pending()[0].detail, stored);
+  handler = () => json(200, {});
+  await ob.flush(CODE);
+  assert.equal(calls[0].body.fields.detail.stringValue, stored);
+  // a long run of emoji is cut to exactly 80 whole emoji
+  const ob2 = createOutbox(storageStub(), "k");
+  ob2.add(ev(2, { detail: "\u{1F600}".repeat(100) }));
+  assert.equal(ob2.pending()[0].detail, "\u{1F600}".repeat(80));
+});
+
+test("outbox keeps events added while storage writes fail (getItem still returns the last good write)", async () => {
+  let stored = null, failWrites = false;
+  const flaky = {
+    getItem: () => stored,
+    setItem: (k, v) => { if (failWrites) throw new Error("QuotaExceededError"); stored = v; },
+  };
+  const ob = createOutbox(flaky, "k");
+  const A = ev(1), B = ev(2), C = ev(3);
+  assert.equal(ob.add(A), true);
+  failWrites = true;
+  assert.equal(ob.add(B), true);
+  assert.deepEqual(ob.pending().map(e => e.id), [A.id, B.id], "B survives although storage still holds only A");
+  assert.equal(ob.add(C), true);
+  assert.deepEqual(ob.pending().map(e => e.id), [A.id, B.id, C.id]);
+  // flush sends A, B and C; the failed-write state neither resurrects nor loses anything
+  handler = c => (c.url.includes(encodeURIComponent(B.id)) ? json(500, {}) : json(200, {}));
+  assert.deepEqual(await ob.flush(CODE), { sent: 2, failed: 1 });
+  assert.equal(calls.length, 3);
+  assert.deepEqual(ob.pending().map(e => e.id), [B.id]);
+  // once writes work again the queue is persisted
+  failWrites = false;
+  handler = () => json(200, {});
+  assert.deepEqual(await ob.flush(CODE), { sent: 1, failed: 0 });
+  assert.deepEqual(ob.pending(), []);
+  assert.deepEqual(JSON.parse(stored), []);
+});
+
+test("outbox persists the in-memory queue again on the next successful save after a failed write", () => {
+  let stored = null, failWrites = false;
+  const flaky = { getItem: () => stored, setItem: (k, v) => { if (failWrites) throw new Error("quota"); stored = v; } };
+  const ob = createOutbox(flaky, "k");
+  ob.add(ev(1));
+  failWrites = true;
+  ob.add(ev(2));
+  failWrites = false;
+  ob.add(ev(3));
+  assert.deepEqual(JSON.parse(stored).map(e => e.id), [ev(1).id, ev(2).id, ev(3).id]);
+  assert.deepEqual(createOutbox(flaky, "k").pending().map(e => e.id), [ev(1).id, ev(2).id, ev(3).id]);
 });
 
 test("outbox.pending returns copies, so callers cannot corrupt the queue", () => {

@@ -130,13 +130,29 @@ export async function listTickets(code, sinceTs) {
 
 // ---------- outbox: pending ticket events, persisted so a closed tab or lost network loses nothing ----------
 
+const KIDS = ['zyler', 'kadyn'];
+const APP_IDS = ['amc', 'french', 'typing', 'spelling'];
+
+// The rules allow at most 80 characters; cut by code points so an emoji is never split in half.
+const clip = detail => Array.from(String(detail == null ? '' : detail)).slice(0, 80).join('');
+
+// Does the event meet the shared ticket contract (and the rules, and Firestore's doc id limits)?
+function validEvent(e) {
+  return !!e && typeof e === 'object'
+    && typeof e.id === 'string' && e.id !== '' && e.id !== '.' && e.id !== '..' && !e.id.includes('/') && !/^__.*__$/.test(e.id)
+    && KIDS.includes(e.kid) && APP_IDS.includes(e.app)
+    && Number.isInteger(e.tickets) && e.tickets >= 1 && e.tickets <= 200
+    && Number.isFinite(e.ts) && Number.isInteger(e.ts)
+    && typeof e.detail === 'string';
+}
+
 function ticketFields(e) {
   return {
     kid: { stringValue: String(e.kid) },
     app: { stringValue: String(e.app) },
     tickets: { integerValue: String(Math.round(Number(e.tickets))) },
     ts: { integerValue: String(Math.round(Number(e.ts))) },
-    detail: { stringValue: String(e.detail == null ? '' : e.detail).slice(0, 80) },
+    detail: { stringValue: clip(e.detail) },
   };
 }
 
@@ -144,9 +160,11 @@ function ticketFields(e) {
 // hub confirms them. Sending the same id twice is harmless: the second create answers ALREADY_EXISTS.
 export function createOutbox(storage, key) {
   let mem = []; // used if storage is unreadable or full
+  let dirty = false; // the last write to storage failed, so `mem` is newer than what storage holds
   let inFlight = null;
 
   function load() {
+    if (dirty) return mem; // storage is stale: never let it overwrite events only memory has
     try {
       const raw = storage.getItem(key);
       if (raw == null) return mem;
@@ -157,15 +175,18 @@ export function createOutbox(storage, key) {
   }
   function save(list) {
     mem = list;
-    try { storage.setItem(key, JSON.stringify(list)); } catch { /* full or private mode: memory copy remains */ }
+    try { storage.setItem(key, JSON.stringify(list)); dirty = false; } catch { dirty = true; /* full or private mode: the memory copy is the truth until a write works */ }
   }
 
-  // Queues an event. Returns false (and does nothing) for a malformed event or an id already pending.
+  // Queues an event. Returns false (and does nothing) if it breaks the shared contract: kid or app not
+  // known, tickets not an integer 1..200, ts not an integer, detail not a string, or an id that is empty,
+  // contains '/', or looks like __x__. Returns true if it was queued or its id is already pending (the
+  // first one wins). detail is cut to 80 characters before it is stored.
   function add(event) {
-    if (!event || typeof event.id !== 'string' || !event.id) return false;
+    if (!validEvent(event)) return false;
     const list = load();
-    if (list.some(e => e.id === event.id)) return false;
-    save([...list, clone(event)]);
+    if (list.some(e => e.id === event.id)) return true;
+    save([...list, { ...clone(event), detail: clip(event.detail) }]);
     return true;
   }
 
@@ -190,7 +211,7 @@ export function createOutbox(storage, key) {
       if (await sendOne(code, e)) done.add(e.id); else failed++;
     }
     // Re-read: events added while we were sending stay queued.
-    if (done.size) save(load().filter(e => !done.has(e.id)));
+    if (done.size || dirty) save(load().filter(e => !done.has(e.id))); // also retries a failed write
     return { sent: done.size, failed };
   }
 
