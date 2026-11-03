@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_SETTINGS, effectiveSettings, withPendingChange, validateSettings,
   amcTickets, amcTicketEvents, countTickets, weeklyMix, guaranteedShares,
-  ladderStatus, localDayKey,
+  ladderStatus, localDayKey, ticketsSince,
 } from "../js/balance.js";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -151,18 +151,52 @@ test("countTickets: window is (ts - 7d, ts], so an event exactly 7 days earlier 
   assert.equal(byId(inside, "b").counted, 0);
 });
 
-test("countTickets: result covers [now - 14d, now], but (now-14d, now-7d] still shapes today's caps", () => {
-  const now = MON9;
+test("countTickets: result covers [ticketsSince(now), now], and the older days still shape today's caps", () => {
+  const now = MON9;                  // Mon 2 Nov 09:00
+  const since = at(2026, 9, 19, 0); // Mon 19 Oct 00:00, local midnight 14 days before today
   const out = countTickets([
-    ev("amc", 5, now - 14 * DAY - 1, "gone"),
-    ev("amc", 5, now - 14 * DAY, "edge"),
-    ev("amc", 45, now - 7 * DAY + 1, "recent"), // still inside the window of the next event
+    ev("amc", 5, since - 1, "gone"),
+    ev("amc", 5, since, "edge"),
+    ev("amc", 5, now - 14 * DAY - 1, "after-midnight"), // before now - 14d, but after the anchor: kept
+    ev("amc", 45, now - 7 * DAY + 1, "recent"),         // still inside the window of the next event
     ev("amc", 10, now - 1000, "today"),
     ev("amc", 10, now + 1, "future"),
   ], ZYLER, 150, now);
-  assert.deepEqual(out.map(e => e.id), ["edge", "recent", "today"]);
+  assert.deepEqual(out.map(e => e.id), ["edge", "after-midnight", "recent", "today"]);
   assert.equal(byId(out, "recent").counted, 45);
   assert.equal(byId(out, "today").counted, 0);
+});
+
+test("countTickets: today's counted tickets don't change as the day goes on (R8 regression)", () => {
+  // Chain: old AMC 14 days back caps a 7-days-back AMC event, which leaves today's AMC free.
+  // With a moving now - 14d cut-off, "old" fell off at 10:00 and today's 45 dropped to 0.
+  const evs = [
+    ev("amc", 45, at(2026, 9, 20, 10), "old"),         // Tue 20 Oct 10:00, 14 days back
+    ev("french", 5, at(2026, 9, 24, 12), "mid"),       // Sat 24 Oct, 10 days back
+    ev("typing", 20, at(2026, 9, 25, 18), "mid2"),     // Sun 25 Oct, 9 days back
+    ev("amc", 45, at(2026, 9, 27, 9, 30), "week"),     // Tue 27 Oct 09:30, inside today's 09:00 window
+    ev("amc", 45, at(2026, 10, 3, 9), "today"),        // Tue 3 Nov 09:00
+  ];
+  const countedToday = now => {
+    const out = countTickets(evs, ZYLER, 150, now);
+    assert.equal(byId(out, "week").counted, 0);
+    return byId(out, "today").counted;
+  };
+  assert.equal(countedToday(at(2026, 10, 3, 9) + 1000), 45);
+  assert.equal(countedToday(at(2026, 10, 3, 11)), 45);
+  assert.equal(countedToday(at(2026, 10, 3, 23, 59)), 45);
+  const lad = ladderStatus(DEFAULT_SETTINGS.ladder, countTickets(evs, ZYLER, 150, at(2026, 10, 3, 23, 59)), at(2026, 10, 3, 23, 59));
+  assert.equal(lad.earnedMinutes, 55); // 45 tickets: 15 + 20, 10 toward the third rung
+});
+
+test("ticketsSince: local midnight 14 days before today's day start, the same all day", () => {
+  assert.equal(ticketsSince(at(2026, 10, 3, 0, 0)), at(2026, 9, 20, 0));
+  assert.equal(ticketsSince(at(2026, 10, 3, 15)), at(2026, 9, 20, 0));
+  assert.equal(ticketsSince(at(2026, 10, 4, 0, 0) - 1), at(2026, 9, 20, 0));
+  assert.equal(ticketsSince(at(2026, 10, 4, 0, 0)), at(2026, 9, 21, 0));
+  assert.equal(ticketsSince(at(2026, 0, 10, 8)), at(2025, 11, 27, 0)); // across a year
+  assert.equal(ticketsSince(at(2026, 10, 10, 12)), at(2026, 9, 27, 0)); // across the US DST change (1 Nov)
+  assert.equal(new Date(ticketsSince(at(2026, 2, 20, 12))).getHours(), 0); // and the spring one
 });
 
 test("countTickets: the same id twice is counted once", () => {

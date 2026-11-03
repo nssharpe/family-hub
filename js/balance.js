@@ -5,7 +5,6 @@
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEK_MS = 7 * DAY_MS;
-const HORIZON_MS = 14 * DAY_MS;
 
 export const APPS = ["amc", "french", "typing", "spelling"];
 export const APP_NAMES = { amc: "AMC", french: "French", typing: "Typing", spelling: "Spelling" };
@@ -128,14 +127,23 @@ const maxOf = (ranges, app) => {
   return Array.isArray(r) && typeof r[1] === "number" ? r[1] : 0;
 };
 
+// Start of the ticket history countTickets uses: local midnight 14 days before today's day
+// start. It is the same instant all day, so counted results only change at midnight (a moving
+// now - 14d could take back tickets already spent on today's TV time). The hub and the
+// extension both fetch the ticket log from this instant, so they feed identical inputs.
+export function ticketsSince(now) {
+  const d = new Date(now);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - 14).getTime(); // DST-safe
+}
+
 // One kid's events in, the same events with `counted` out, sorted by (ts, id) and covering
-// [now - 14d, now]. Each event is judged against the trailing window (ts - 7d, ts]:
+// [ticketsSince(now), now]. Each event is judged against the trailing window (ts - 7d, ts]:
 //   cap = max% x max(baseline, counted total in window + this event's tickets)
 //   counted = clamp(floor(cap - this app's counted in window), 0, tickets)
-// Events in [now - 14d, now - 7d] are processed so the current window starts with the right
-// counts. Duplicate ids keep the first occurrence in (ts, id) order.
+// The older days are processed so the current 7-day window starts with sensible counts.
+// Duplicate ids keep the first occurrence in (ts, id) order.
 export function countTickets(events, ranges, baseline, now) {
-  const from = now - HORIZON_MS;
+  const from = ticketsSince(now);
   const list = (events || [])
     .filter(e => e && typeof e.id === "string" && typeof e.ts === "number" && e.ts >= from && e.ts <= now)
     .slice()
