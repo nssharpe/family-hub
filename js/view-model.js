@@ -7,7 +7,7 @@ export const APP_INFO = {
   amc: { name: "AMC 8 Quest", sub: "Math contest problems", url: "https://nssharpe.github.io/amc8-quest/" },
   french: { name: "French", sub: "Les Cartes de Mamou", url: "https://nssharpe.github.io/mamou-french/" },
   typing: { name: "Typing", sub: "Turbo Keys", url: "https://nssharpe.github.io/turbo-keys/" },
-  spelling: { name: "Spelling", sub: "Spell Hive", url: "https://nssharpe.github.io/spell-hive/" },
+  spelling: { name: "Spelling", sub: "Spelling Hive", url: "https://nssharpe.github.io/spelling-hive/" },
 };
 
 export const STATUS_LABEL = { needs: "Needs more", ok: "On track", max: "At max", off: "Off" };

@@ -65,5 +65,5 @@ Run it after every rules change (wait a minute after deploying if everything is 
 - **Testing the UI:** `node tools/seed-test-hub.mjs seed` writes `DEFAULT_SETTINGS` and 20 mixed events under a `hub-testX-...` code
   and prints it; open `index.html#join=<code>`. Always finish with `node tools/seed-test-hub.mjs clean <code>` (admin token, needs `GCLOUD_ACCOUNT`).
   Serve with a no-cache server (browsers cache ES modules hard).
-- **Colours:** every text/background pair and the contrast ratios are listed at the top of `css/hub.css`
+- **Colors:** every text/background pair and the contrast ratios are listed at the top of `css/hub.css`
   (all >= 4.5:1 text, >= 3:1 UI). Light theme only. Keep that table current when you change a token.

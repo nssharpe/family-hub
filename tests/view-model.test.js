@@ -10,7 +10,7 @@ const mix = (o) => Object.fromEntries(["amc", "french", "typing", "spelling"].ma
   [a, { counted: 0, share: 0, min: 0, max: 100, status: "ok", ...(o[a] || {}) }]));
 
 test("appHref appends the hub handoff, or nothing without a hub", () => {
-  assert.equal(appHref("spelling", CODE, "zyler"), `https://nssharpe.github.io/spell-hive/#hub=${CODE}&kid=zyler`);
+  assert.equal(appHref("spelling", CODE, "zyler"), `https://nssharpe.github.io/spelling-hive/#hub=${CODE}&kid=zyler`);
   assert.equal(appHref("french", null, "kadyn"), "https://nssharpe.github.io/mamou-french/");
   assert.deepEqual(Object.keys(APP_INFO), ["amc", "french", "typing", "spelling"]);
 });

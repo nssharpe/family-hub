@@ -12,7 +12,7 @@
        Needs more #6B3300 on #FFE7C2 8.32     On track #0F4D26 on #D3F0DB 8.18
        At max     #1B3A8C on #DCE5F8 8.18     Off      #343C46 on #E4E6EA 8.94
      Banner: #5B4300 on #FFF4D6 8.53      Disabled: #4B5563 on #E4E6EA 6.05
-     Grown-ups' corner: notice-ok #0F4D26 on #D3F0DB 8.18 (border same colour)
+     Grown-ups' corner: notice-ok #0F4D26 on #D3F0DB 8.18 (border same color)
        notice-err #7A1212 on #FDE7E7 9.24 (on bg 9.85 for the border)
        form labels, input text ink on surface 14.76; hint text (.small) muted on surface 6.46
        input disabled #4B5563 on #E4E6EA 6.05; guaranteed chips reuse Needs more / On track (8.32 / 8.18)
@@ -24,7 +24,7 @@
        band outline #1F7A3D on track #E3E6EA 4.29, on surface 5.37
        marker #1F2933 on track 11.79, on band fill #A8DDB5 9.61 (the band fill itself is decoration: the outline carries it)
        focus ring #0F5C6E on surface 7.56, on bg 6.82
-   The bar numbers are always also written as text under each bar, so colour is never the only signal. */
+   The bar numbers are always also written as text under each bar, so color is never the only signal. */
 
 :root {
   --bg: #F5F3EE;
