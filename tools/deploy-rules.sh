@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 P=sharpe-family
-ACCOUNT="${GCLOUD_ACCOUNT:?set GCLOUD_ACCOUNT to Nate's personal Google account}"
+ACCOUNT="${GCLOUD_ACCOUNT:?set GCLOUD_ACCOUNT to the personal Google account that owns sharpe-family}"
 T=$(gcloud auth print-access-token --account "$ACCOUNT")
 H=(-H "Authorization: Bearer $T" -H "x-goog-user-project: $P" -H "Content-Type: application/json")
 BODY=$(python -c 'import json;print(json.dumps({"source":{"files":[{"name":"firestore.rules","content":open("firestore.rules",encoding="utf-8").read()}]}}))')
