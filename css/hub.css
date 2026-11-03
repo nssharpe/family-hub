@@ -12,7 +12,13 @@
        Needs more #6B3300 on #FFE7C2 8.32     On track #0F4D26 on #D3F0DB 8.18
        At max     #1B3A8C on #DCE5F8 8.18     Off      #343C46 on #E4E6EA 8.94
      Banner: #5B4300 on #FFF4D6 8.53      Disabled: #4B5563 on #E4E6EA 6.05
+     Grown-ups' corner: notice-ok #0F4D26 on #D3F0DB 8.18 (border same colour)
+       notice-err #7A1212 on #FDE7E7 9.24 (on bg 9.85 for the border)
+       form labels, input text ink on surface 14.76; hint text (.small) muted on surface 6.46
+       input disabled #4B5563 on #E4E6EA 6.05; guaranteed chips reuse Needs more / On track (8.32 / 8.18)
+       warning list (guaranteedShares) reuses Banner 8.53; summary terms muted on surface 6.46
      UI / graphics (need 3)
+       input border = outline #6B7785 on surface 4.56 (inputs sit on cards); hover border accent #0F5C6E on surface 7.56
        outline #6B7785 (bar outline, tile and picker borders) on bg #F5F3EE 4.11, surface #FFFFFF 4.56,
          track #E3E6EA 3.64, tile-hover #E6F1F3 3.96
        band outline #1F7A3D on track #E3E6EA 4.29, on surface 5.37
@@ -40,6 +46,7 @@
   --off-bg: #E4E6EA;    --off-fg: #343C46;
   --warn-bg: #FFF4D6;   --warn-fg: #5B4300;
   --disabled-bg: #E4E6EA; --disabled-fg: #4B5563;
+  --err-bg: #FDE7E7;    --err-fg: #7A1212;
   --radius: 14px;
   color-scheme: light;
 }
@@ -139,3 +146,43 @@ a:hover { color: var(--accent-hover); }
 .card:last-child { margin-top: 24px; }
 .recent li { padding: 8px 0; border-top: 1px solid var(--line); }
 .recent li:first-child { border-top: 0; }
+
+/* ---------- grown-ups' corner ---------- */
+.card.g:last-child { margin-top: 0; }
+.card.g { margin-bottom: 12px; }
+.toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; }
+.small { font-size: .875rem; }
+h3 { margin: 12px 0 4px; font-size: 1rem; }
+button.btn { font: inherit; font-weight: 600; cursor: pointer; }
+.btn:disabled:hover { background: var(--disabled-bg); border-color: var(--disabled-bg); color: var(--disabled-fg); }
+
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; font-weight: 600; }
+input[type="text"], input[type="password"], input[type="number"] {
+  width: 100%; min-height: 44px; padding: 8px 10px; font: inherit; font-weight: 400;
+  background: var(--surface); color: var(--ink); border: 2px solid var(--outline); border-radius: 8px;
+}
+input:hover { border-color: var(--accent); }
+input:disabled { background: var(--disabled-bg); color: var(--disabled-fg); border-color: var(--disabled-bg); }
+input[readonly] { background: var(--bg); }
+.gate .btn { margin-top: 4px; }
+
+.notice { margin: 12px 0; padding: 10px 14px; border-radius: 10px; border: 1px solid; font-weight: 600; }
+.notice-ok { background: var(--ok-bg); color: var(--ok-fg); border-color: var(--ok-fg); }
+.notice-err { background: var(--err-bg); color: var(--err-fg); border-color: var(--err-fg); }
+
+.range-list, .ladder-list { display: grid; gap: 12px; margin: 12px 0; }
+.range-row, .ladder-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.range-row:first-child, .ladder-row:first-child { padding-top: 0; border-top: 0; }
+.range-app, .ladder-n { flex-basis: 100%; font-weight: 700; }
+.num { display: flex; flex-direction: column; gap: 2px; width: 78px; font-size: .875rem; font-weight: 600; }
+.range-row .chip { align-self: center; margin-top: 18px; padding: 2px 8px; font-size: .8125rem; }
+.warn-list { margin-top: 8px; padding-left: 14px; list-style: none; display: grid; gap: 8px; }
+
+.copy-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.copy-row input { flex: 1 1 240px; width: auto; }
+
+summary { cursor: pointer; font-weight: 700; }
+.summary { margin: 4px 0 8px; }
+.summary dt { margin-top: 6px; font-weight: 700; }
+.summary dd { margin: 0; color: var(--muted); }

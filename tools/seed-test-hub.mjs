@@ -1,7 +1,7 @@
 // Seeds a throwaway test hub in Firestore (project sharpe-family) for checking the hub UI.
 //   node tools/seed-test-hub.mjs seed           -> writes DEFAULT_SETTINGS and 20 mixed ticket events
 //                                                  under a hub-test... code, prints the code
-//   node tools/seed-test-hub.mjs clean <code>   -> deletes that hub's tickets and settings (admin token)
+//   node tools/seed-test-hub.mjs clean <code>   -> deletes that hub's tickets and settings (admin token; needs GCLOUD_ACCOUNT set)
 // Always run `clean` afterwards. The code looks like hub-testX-xxxxx-xxxxx-xxxxx so it passes isHubCode.
 import { execFileSync } from "node:child_process";
 import { DEFAULT_SETTINGS } from "../js/balance.js";
@@ -12,7 +12,9 @@ const rnd = n => Array.from({ length: n }, () => ALPHA[Math.floor(Math.random() 
 const [cmd, arg] = process.argv.slice(2);
 
 function adminHeaders() {
-  const token = execFileSync("gcloud", ["auth", "print-access-token", "--account", "NATES_PERSONAL_GOOGLE_ACCOUNT"], { encoding: "utf8", shell: true }).trim();
+  const account = process.env.GCLOUD_ACCOUNT;
+  if (!account) throw new Error("set GCLOUD_ACCOUNT to Nate's personal Google account");
+  const token = execFileSync("gcloud", ["auth", "print-access-token", "--account", account], { encoding: "utf8", shell: true }).trim();
   return { Authorization: `Bearer ${token}`, "x-goog-user-project": "sharpe-family" };
 }
 

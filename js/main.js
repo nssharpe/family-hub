@@ -1,6 +1,5 @@
-// Hash router: #/ (picker), #/kid/<id>, #/grown-ups, #join=<hub code>.
+// Hash router: #/ (picker), #/kid/<id>, #/grown-ups, #join=<hub code> (asks before joining).
 import { isHubCode } from "./hub-client.js";
-import { joinHub } from "./app.js";
 import * as pick from "./screens/pick.js";
 import * as kid from "./screens/kid.js";
 import * as grownups from "./screens/grownups.js";
@@ -21,10 +20,11 @@ function route() {
   if (hash.startsWith("#join=")) {
     let code = "";
     try { code = decodeURIComponent(hash.slice(6)); } catch { /* bad escape: treated as not a code */ }
-    const joined = isHubCode(code) && joinHub(code);
-    // Replace the URL so the code doesn't stay in the address bar or the history.
-    history.replaceState(null, "", location.pathname + location.search + (joined ? "#/" : "#/grown-ups"));
-    return show(joined ? pick : grownups, joined ? {} : { notice: "That join link isn't a valid hub code." });
+    const valid = isHubCode(code);
+    // Replace the URL so the code doesn't stay in the address bar or the history. The grown-ups
+    // screen asks "Join this family hub?" and only stores the code on a yes.
+    history.replaceState(null, "", location.pathname + location.search + "#/grown-ups");
+    return show(grownups, valid ? { join: code } : { notice: "That join link isn't a valid hub code." });
   }
   const m = /^#\/kid\/([\w-]+)$/.exec(hash);
   if (m) return show(kid, { id: m[1] });

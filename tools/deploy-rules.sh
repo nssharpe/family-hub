@@ -3,7 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 P=sharpe-family
-T=$(gcloud auth print-access-token --account NATES_PERSONAL_GOOGLE_ACCOUNT)
+ACCOUNT="${GCLOUD_ACCOUNT:?set GCLOUD_ACCOUNT to Nate's personal Google account}"
+T=$(gcloud auth print-access-token --account "$ACCOUNT")
 H=(-H "Authorization: Bearer $T" -H "x-goog-user-project: $P" -H "Content-Type: application/json")
 BODY=$(python -c 'import json;print(json.dumps({"source":{"files":[{"name":"firestore.rules","content":open("firestore.rules",encoding="utf-8").read()}]}}))')
 RS=$(curl -s "${H[@]}" -d "$BODY" "https://firebaserules.googleapis.com/v1/projects/$P/rulesets")

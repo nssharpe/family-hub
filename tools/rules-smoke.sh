@@ -64,7 +64,8 @@ req GET   "$BASE/typing";                                    check "list typing 
 req DELETE "$BASE/hubs/$CODE";                               check "delete hub denied" 403 PERMISSION_DENIED
 
 # Cleanup with the admin token (bypasses rules)
-T=$(gcloud auth print-access-token --account NATES_PERSONAL_GOOGLE_ACCOUNT)
+ACCOUNT="${GCLOUD_ACCOUNT:?set GCLOUD_ACCOUNT to Nate's personal Google account}"
+T=$(gcloud auth print-access-token --account "$ACCOUNT")
 for path in "hubs/$CODE/tickets/t1" "hubs/$CODE" "typing/$CODE" "spelling/$CODE"; do
   s=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE -H "Authorization: Bearer $T" -H "x-goog-user-project: $P" "$BASE/$path")
   if [ "$s" = 200 ]; then echo "OK   cleanup $path"; else echo "FAIL cleanup $path (HTTP $s)"; FAILS=$((FAILS+1)); fi
