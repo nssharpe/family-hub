@@ -87,7 +87,7 @@ export function amcAnswers(kid, timeoutMs = 12000) {
       if (done) return;
       done = true;
       clearTimeout(timer);
-      delete window[cb];
+      window[cb] = () => {}; // a late answer after a timeout must not throw ReferenceError
       script.remove();
       if (err) reject(err); else resolve(value);
     };

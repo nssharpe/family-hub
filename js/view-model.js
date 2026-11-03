@@ -77,3 +77,9 @@ export function buildKidData(events, settings, kidId, now) {
     recent: counted.slice().reverse().slice(0, 10), // newest first
   };
 }
+
+// R11: AMC tickets come only from the Sheet. Any `amc` event found in the hub log is dropped
+// before the two sources are combined (rules allow such events, but nothing should write them).
+export function kidEvents(hubEvents, amcEvents) {
+  return (hubEvents || []).filter(e => e && e.app !== "amc").concat(amcEvents || []);
+}

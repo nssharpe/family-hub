@@ -13,7 +13,9 @@
        At max     #1B3A8C on #DCE5F8 8.18     Off      #343C46 on #E4E6EA 8.94
      Banner: #5B4300 on #FFF4D6 8.53      Disabled: #4B5563 on #E4E6EA 6.05
      UI / graphics (need 3)
-       bar outline #8A96A3 on surface 3.01    band outline #1F7A3D on track #E3E6EA 4.29, on surface 5.37
+       outline #6B7785 (bar outline, tile and picker borders) on bg #F5F3EE 4.11, surface #FFFFFF 4.56,
+         track #E3E6EA 3.64, tile-hover #E6F1F3 3.96
+       band outline #1F7A3D on track #E3E6EA 4.29, on surface 5.37
        marker #1F2933 on track 11.79, on band fill #A8DDB5 9.61 (the band fill itself is decoration: the outline carries it)
        focus ring #0F5C6E on surface 7.56, on bg 6.82
    The bar numbers are always also written as text under each bar, so colour is never the only signal. */
@@ -28,7 +30,7 @@
   --accent-hover: #0A4757;
   --on-accent: #FFFFFF;
   --tile-hover: #E6F1F3;
-  --outline: #8A96A3;
+  --outline: #6B7785;
   --track: #E3E6EA;
   --band-fill: #A8DDB5;
   --band-line: #1F7A3D;
@@ -54,7 +56,7 @@ h1, h2, p, ul { margin: 0; }
 ul { padding: 0; list-style: none; }
 h2 { font-size: 1.125rem; line-height: 1.3; margin-bottom: 12px; }
 h2.plain { margin: 24px 0 12px; }
-.title { font-size: 1.75rem; line-height: 1.2; }
+.title { font-size: 1.75rem; line-height: 1.2; overflow-wrap: anywhere; }
 .lead { margin: 8px 0 20px; color: var(--muted); }
 .muted { color: var(--muted); }
 .date { color: var(--muted); }
@@ -81,7 +83,7 @@ a:hover { color: var(--accent-hover); }
   display: grid; place-items: center; flex: none; width: 48px; height: 48px; border-radius: 50%;
   background: var(--accent); color: var(--on-accent); font-size: 1.5rem; font-weight: 700;
 }
-.kid-name { font-size: 1.375rem; font-weight: 700; }
+.kid-name { font-size: 1.375rem; font-weight: 700; overflow-wrap: anywhere; }
 
 .callout { margin-top: 28px; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
 .callout p { margin-bottom: 12px; color: var(--muted); }

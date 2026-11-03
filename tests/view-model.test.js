@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_SETTINGS } from "../js/balance.js";
-import { appHref, bestPick, tileNote, recentLine, nextUnlock, buildKidData, APP_INFO } from "../js/view-model.js";
+import { appHref, bestPick, tileNote, recentLine, nextUnlock, buildKidData, kidEvents, APP_INFO } from "../js/view-model.js";
 
 const CODE = "hub-abcde-23456-fghjk-mnpqr";
 const NOW = new Date(2026, 10, 3, 16, 30).getTime(); // 4:30pm local
@@ -46,4 +46,15 @@ test("buildKidData counts one kid's events and lists the newest first", () => {
   assert.equal(d.ladder.ticketsToday, d.counted.reduce((s, e) => s + e.counted, 0));
   assert.ok(d.mix.typing.counted <= 5);
   assert.equal(buildKidData(events, DEFAULT_SETTINGS, "nobody", NOW), null);
+});
+
+test("kidEvents (R11): amc events in the hub log are ignored, Sheet-derived ones kept", () => {
+  const ev = (id, app, tickets, ts) => ({ id, kid: "zyler", app, tickets, ts, detail: "" });
+  const hub = [ev("h1", "amc", 40, at(10)), ev("h2", "typing", 3, at(11))];
+  const sheet = [ev("amc:2010:5:1", "amc", 2, at(9))];
+  const got = kidEvents(hub, sheet);
+  assert.deepEqual(got.map(e => e.id), ["h2", "amc:2010:5:1"]);
+  const d = buildKidData(got, DEFAULT_SETTINGS, "zyler", NOW);
+  assert.equal(d.mix.amc.counted, 2);
+  assert.deepEqual(kidEvents(null, null), []);
 });

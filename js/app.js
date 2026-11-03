@@ -5,7 +5,7 @@
 import { DEFAULT_SETTINGS, effectiveSettings, amcTicketEvents, ticketsSince } from "./balance.js";
 import { getHub, listTickets, isHubCode } from "./hub-client.js";
 import { amcAnswers } from "./amc-sheet.js";
-import { buildKidData } from "./view-model.js";
+import { buildKidData, kidEvents } from "./view-model.js";
 
 export const STORE_KEY = "family-hub:v1";
 
@@ -46,12 +46,22 @@ export function getSettings(now = Date.now()) {
   return effectiveSettings(doc, now);
 }
 
+export const HUB_TIMEOUT_MS = 12000;
+
+// Rejects if `promise` hasn't settled in `ms`, so a stalled connection ends up as a failed fetch
+// (stale banner) instead of "Loading..." forever. The late answer, if any, is ignored.
+export function withTimeout(promise, ms = HUB_TIMEOUT_MS) {
+  let timer;
+  const limit = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Timed out.")), ms); });
+  return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
+}
+
 // Fetches the hub's settings into the cache (no-op without a hub). Never throws.
-export async function refreshSettings() {
+export async function refreshSettings(timeoutMs = HUB_TIMEOUT_MS) {
   const s = load();
   if (!s.hub) return false;
   try {
-    const hub = await getHub(s.hub);
+    const hub = await withTimeout(getHub(s.hub), timeoutMs);
     if (hub && hub.settings && hub.settings.kids) { s.settingsDoc = hub.settings; save(); return true; }
   } catch { /* offline: keep the cached settings */ }
   return false;
@@ -63,11 +73,11 @@ const ok = r => r.status === "fulfilled";
 // Tickets come from the hub log (fetched from ticketsSince(now), so the hub and the extension
 // count the same events) plus the kid's AMC answers from the Sheet. If a source can't be read,
 // its last cached copy is used and `stale` is true (`staleAt` = when that copy was saved, if known).
-export async function loadKidData(kidId, now = Date.now()) {
+export async function loadKidData(kidId, now = Date.now(), timeoutMs = HUB_TIMEOUT_MS) {
   const s = load();
   const [, hubR, amcR] = await Promise.all([
-    refreshSettings(),
-    Promise.allSettled([s.hub ? listTickets(s.hub, ticketsSince(now)) : Promise.resolve([])]).then(r => r[0]),
+    refreshSettings(timeoutMs),
+    Promise.allSettled([s.hub ? withTimeout(listTickets(s.hub, ticketsSince(now)), timeoutMs) : Promise.resolve([])]).then(r => r[0]),
     Promise.allSettled([amcAnswers(kidId)]).then(r => r[0]),
   ]);
 
@@ -97,7 +107,7 @@ export async function loadKidData(kidId, now = Date.now()) {
   const settings = getSettings(now);
   const kid = settings.kids[kidId];
   if (!kid) return null;
-  const events = hubEvents.concat(amcTicketEvents(answers, kidId, settings.rates));
+  const events = kidEvents(hubEvents, amcTicketEvents(answers, kidId, settings.rates)); // R11: no hub amc events
   const data = buildKidData(events, settings, kidId, now);
   return {
     ...data,
