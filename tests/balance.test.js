@@ -100,6 +100,24 @@ test("countTickets: partial count when an event crosses the cap", () => {
   assert.equal(byId(out, "b").counted, 1);
 });
 
+test("countTickets: a big single event counts like that many single tickets (R10)", () => {
+  // empty week, Zyler defaults: 30% x 150 = 45 AMC, 50% x 150 = 75 typing
+  assert.equal(countTickets([ev("amc", 1000, MON9)], ZYLER, 150, MON9)[0].counted, 45);
+  assert.equal(countTickets([ev("typing", 300, MON9)], ZYLER, 150, MON9)[0].counted, 75);
+  // and exactly what the same tickets one at a time would give
+  const singles = Array.from({ length: 300 }, (_, i) => ev("typing", 1, MON9 + i));
+  assert.equal(sum(countTickets(singles, ZYLER, 150, MON9 + 1000)), 75);
+});
+
+test("countTickets: past the baseline, a big event still stops at the max share", () => {
+  // typing [0,100], AMC [0,30]: 200 typing, then 1000 AMC → 30% of (200 + c) ≥ c → c ≤ 85.7 → 85
+  const ranges = { amc: [0, 30], french: [0, 30], typing: [0, 100], spelling: [0, 50] };
+  const out = countTickets([ev("typing", 200, MON9, "t"), ev("amc", 1000, MON9 + 1, "a")], ranges, 150, MON9 + 2);
+  assert.equal(byId(out, "a").counted, 85);
+  const one = Array.from({ length: 1000 }, (_, i) => ev("amc", 1, MON9 + 1 + i));
+  assert.equal(sum(countTickets([ev("typing", 200, MON9, "t"), ...one], ranges, 150, MON9 + 5000), "amc"), 85);
+});
+
 test("countTickets: catch-up, after 300 typing tickets AMC's cap is 30% of the bigger total", () => {
   // typing uncapped here so all 300 count and the counted total is 45 + 300 = 345
   const ranges = { amc: [0, 30], french: [0, 30], typing: [0, 100], spelling: [0, 50] };
@@ -108,10 +126,10 @@ test("countTickets: catch-up, after 300 typing tickets AMC's cap is 30% of the b
     ev("amc", 50, t, "a1"),            // 45 (cold start)
     ev("amc", 10, t + 1000, "a2"),     // 0, at the cap
     ev("typing", 300, t + 2000, "t1"), // 300: cap 100% x 345
-    ev("amc", 100, t + 3000, "a3"),    // floor(30% x (345 + 100) - 45) = floor(88.5) = 88
-    ev("amc", 10, t + 4000, "a4"),     // floor(30% x 443 - 133) < 0 → 0
+    ev("amc", 100, t + 3000, "a3"),    // per ticket: 45 + c <= 30% x (345 + c) → c <= 83.57 → 83
+    ev("amc", 10, t + 4000, "a4"),     // AMC is at 128 of 428; a 129th doesn't fit 30% x 429 → 0
   ], ranges, 150, t + 5000);
-  assert.deepEqual(out.map(e => [e.id, e.counted]), [["a1", 45], ["a2", 0], ["t1", 300], ["a3", 88], ["a4", 0]]);
+  assert.deepEqual(out.map(e => [e.id, e.counted]), [["a1", 45], ["a2", 0], ["t1", 300], ["a3", 83], ["a4", 0]]);
 });
 
 test("countTickets: catch-up with single AMC tickets stops when AMC reaches 30%", () => {
@@ -169,12 +187,13 @@ test("countTickets: result covers [ticketsSince(now), now], and the older days s
 
 test("countTickets: today's counted tickets don't change as the day goes on (R8 regression)", () => {
   // Chain: old AMC 14 days back caps a 7-days-back AMC event, which leaves today's AMC free.
-  // With a moving now - 14d cut-off, "old" fell off at 10:00 and today's 45 dropped to 0.
+  // With a moving now - 14d cut-off, "old" fell off by 11:00 and today's 45 dropped to 0.
+  // Times leave an hour of slack so the chain forms with or without the 1 Nov DST change.
   const evs = [
-    ev("amc", 45, at(2026, 9, 20, 10), "old"),         // Tue 20 Oct 10:00, 14 days back
+    ev("amc", 45, at(2026, 9, 20, 10, 45), "old"),     // Tue 20 Oct 10:45, 14 days back, in week's window
     ev("french", 5, at(2026, 9, 24, 12), "mid"),       // Sat 24 Oct, 10 days back
     ev("typing", 20, at(2026, 9, 25, 18), "mid2"),     // Sun 25 Oct, 9 days back
-    ev("amc", 45, at(2026, 9, 27, 9, 30), "week"),     // Tue 27 Oct 09:30, inside today's 09:00 window
+    ev("amc", 45, at(2026, 9, 27, 10, 30), "week"),    // Tue 27 Oct 10:30, inside today's 09:00 window
     ev("amc", 45, at(2026, 10, 3, 9), "today"),        // Tue 3 Nov 09:00
   ];
   const countedToday = now => {
@@ -351,7 +370,11 @@ test("effectiveSettings: a change made at 15:00 applies from 00:00 the next loca
   const next = effectiveSettings(doc, at(2026, 10, 4, 0, 0));
   assert.equal(next.baseline, 200);
   assert.equal(next.pending, null);
-  assert.equal(effectiveSettings(DEFAULT_SETTINGS, MON9), DEFAULT_SETTINGS);
+  const same = effectiveSettings(DEFAULT_SETTINGS, MON9);
+  assert.deepEqual(same, DEFAULT_SETTINGS);
+  assert.notEqual(same, DEFAULT_SETTINGS); // a fresh copy, never the caller's object
+  same.kids.zyler.ranges.amc[1] = 99;
+  assert.equal(DEFAULT_SETTINGS.kids.zyler.ranges.amc[1], 30);
 });
 
 test("withPendingChange keeps a pending change that already took effect", () => {

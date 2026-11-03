@@ -44,7 +44,7 @@ export function effectiveSettings(doc, now) {
   if (p && p.settings && typeof p.effectiveFrom === "string" && p.effectiveFrom <= localDayKey(now)) {
     return { ...clone(p.settings), pending: null };
   }
-  return doc;
+  return doc == null ? doc : clone(doc); // always a fresh copy
 }
 
 // Stores `newSettings` to take effect at the next local midnight. A pending change that has
@@ -137,9 +137,9 @@ export function ticketsSince(now) {
 }
 
 // One kid's events in, the same events with `counted` out, sorted by (ts, id) and covering
-// [ticketsSince(now), now]. Each event is judged against the trailing window (ts - 7d, ts]:
-//   cap = max% x max(baseline, counted total in window + this event's tickets)
-//   counted = clamp(floor(cap - this app's counted in window), 0, tickets)
+// [ticketsSince(now), now]. Each event is judged against the trailing window (ts - 7d, ts],
+// one ticket at a time: counted = the largest c in 0..tickets with
+//   (this app's counted in window) + c <= max% x max(baseline, counted total in window + c)
 // The older days are processed so the current 7-day window starts with sensible counts.
 // Duplicate ids keep the first occurrence in (ts, id) order.
 export function countTickets(events, ranges, baseline, now) {
@@ -168,9 +168,18 @@ export function countTickets(events, ranges, baseline, now) {
     }
     const tickets = Number.isInteger(e.tickets) && e.tickets > 0 ? e.tickets : 0;
     const mine = inWin[e.app] || 0;
-    // max * X / 100 rather than (max / 100) * X: same formula, exact for whole numbers
-    const cap = (maxOf(ranges, e.app) * Math.max(base, total + tickets)) / 100;
-    e.counted = Math.max(0, Math.min(tickets, Math.floor(cap - mine)));
+    const max = Math.min(100, Math.max(0, maxOf(ranges, e.app)));
+    // The event counts as if it were `tickets` single tickets: c tickets fit while
+    // mine + c <= max% x max(baseline, total + c). Compared as 100 x (mine + c) <= max x X,
+    // which is exact for whole numbers (no (max / 100) float). For max <= 100 the slack only
+    // shrinks as c grows, so the tickets that fit are 0..c and a binary search finds c.
+    const fits = c => 100 * (mine + c) <= max * Math.max(base, total + c);
+    let lo = 0, hi = tickets; // invariant: lo fits (or lo is 0), everything above hi doesn't
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (fits(mid)) lo = mid; else hi = mid - 1;
+    }
+    e.counted = lo;
     inWin[e.app] = mine + e.counted;
     total += e.counted;
   }
